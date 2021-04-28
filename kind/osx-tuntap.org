@@ -1,0 +1,97 @@
+#+TITLE: Reach Kind Nodes from OSX
+
+* TunTap OSX
+
+This will allow us to reach kind nodes within OSX.
+
+https://github.com/AlmirKadric-Published/docker-tuntap-osx
+
+** Install tuntap
+#+begin_src tmate :window tuntap
+  brew tap homebrew/cask
+  brew cask install tuntap
+#+end_src
+
+** Install docker_tap
+#+begin_src tmate :window tuntap
+  # git clone https://github.com/AlmirKadric-Published/docker-tuntap-osx
+  cd ~/src/docker-tuntap-osx
+  ./sbin/docker_tap_install.sh
+  # will restart docker desktop
+#+end_src
+
+** Start docker_tap
+#+#begin_src shell :dir /sudo::~/src/docker-tuntap-osx
+
+#+begin_src tmate :window tuntap
+  ./sbin/docker_tap_up.sh
+#+end_src
+
+* Routing
+** On OSX
+#+begin_src shell
+  ip route | grep tap1
+#+end_src
+
+#+RESULTS:
+#+begin_example
+10.0.75.0/30 dev tap1  scope link
+#+end_example
+
+** Within Docker VM
+*** start nsenter
+https://github.com/justincormack/nsenter1
+
+#+name: nsenter1
+#+begin_src shell
+  docker rm -f nsenter1
+  docker run -d --name nsenter1 --privileged --pid=host justincormack/nsenter1 /bin/sleep 9999
+#+end_src
+
+#+RESULTS: nsenter1
+#+begin_example
+nsenter1
+1bfcf218de8070f3e82a1c720fe2d41010e463aa86efb6ab7be9dc0cbab06145
+#+end_example
+*** explore VM
+
+#+name: Find the tap ip
+#+begin_src bash :dir /docker:nsenter1:/
+ip a | grep "inet\ " | grep eth1
+#+end_src
+
+#+RESULTS: Find the tap ip
+#+begin_src bash
+    inet 10.0.75.2/30 brd 10.0.75.3 scope global eth1
+#+end_src
+
+#+name: Find the bridge networks
+#+begin_src bash :dir /docker:nsenter1:/
+ip a | grep "inet\ " | grep br-
+#+end_src
+
+#+RESULTS: Find the bridge networks
+#+begin_src bash
+    inet 172.18.0.1/16 brd 172.18.255.255 scope global br-781e9b51d1b6
+#+end_src
+* Add route to Docker VM network via tap IP
+
+#+begin_src shell :dir /sudo::
+  ip route add 172.18.0.0/16 nexthop 10.0.75.2
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Executing: /usr/bin/sudo /sbin/route add 172.18.0.0/16 10.0.75.2
+add net 172.18.0.0: gateway 10.0.75.2
+#+end_example
+
+#+begin_src shell :dir /sudo::
+  ip route show | grep tap1
+#+end_src
+
+#+RESULTS:
+#+begin_example
+10.0.75.0/30 dev tap1  scope link
+172.18.0.0/16 via 10.0.75.2 dev tap1
+#+end_example

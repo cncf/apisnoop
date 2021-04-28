@@ -1,0 +1,90 @@
++ kind create cluster --config kind+apisnoop.yaml
+ERROR: failed to create cluster: node(s) already exist for a cluster with the name "kind"
++ kubectl wait --for=condition=Ready --selector=app.kubernetes.io/name=auditlogger --timeout=600s pod
+pod/apisnoop-kind-control-plane condition met
++ export PGUSER=apisnoop
++ PGUSER=apisnoop
++ export PGHOST=localhost
++ PGHOST=localhost
++ cat
++ glooctl install gateway --values -
+Creating namespace gloo-system... Done.
+Starting Gloo installation...
+
+Gloo was successfully installed!
++ kubectl wait deployment -n gloo-system --for=condition=Available --selector=gloo=gateway
+deployment.apps/gateway condition met
++ kubectl wait deployment -n gloo-system --for=condition=Available --selector=gloo=gateway-proxy
+deployment.apps/gateway-proxy condition met
++ kubectl wait deployment -n gloo-system --for=condition=Available --selector=gloo=discovery
+deployment.apps/discovery condition met
++ kubectl wait deployment -n gloo-system --for=condition=Available --selector=gloo=gloo
+deployment.apps/gloo condition met
++ kubectl apply -f https://raw.githubusercontent.com/solo-io/gloo/v1.2.9/example/petstore/petstore.yaml
+deployment.apps/petstore created
+service/petstore unchanged
++ kubectl label namespace default discovery.solo.io/function_discovery=enabled --overwrite
+namespace/default not labeled
++ kubectl wait deployment --for=condition=Available --selector=app=petstore
+deployment.apps/petstore condition met
++ glooctl add route --path-exact /all-pets --dest-name default-petstore-8080 --prefix-rewrite /api/pets
+{"level":"info","ts":"2020-10-02T17:41:07.315+1300","caller":"selectionutils/virtual_service.go:99","msg":"Created new default virtual service","virtualService":"virtual_host:<domains:\"*\" > status:<> metadata:<name:\"default\" namespace:\"gloo-system\" > "}
++-----------------+--------------+---------+------+---------+-----------------+-----------------------------------+
+| VIRTUAL SERVICE | DISPLAY NAME | DOMAINS | SSL  | STATUS  | LISTENERPLUGINS |              ROUTES               |
++-----------------+--------------+---------+------+---------+-----------------+-----------------------------------+
+| default         |              | *       | none | Pending |                 | /all-pets ->                      |
+|                 |              |         |      |         |                 | gloo-system.default-petstore-8080 |
+|                 |              |         |      |         |                 | (upstream)                        |
++-----------------+--------------+---------+------+---------+-----------------+-----------------------------------+
++ set +x
+Waiting for default virtual service to be Accepted.......!
++-----------------+--------------+---------+------+----------+-----------------+-----------------------------------+
+| VIRTUAL SERVICE | DISPLAY NAME | DOMAINS | SSL  |  STATUS  | LISTENERPLUGINS |              ROUTES               |
++-----------------+--------------+---------+------+----------+-----------------+-----------------------------------+
+| default         |              | *       | none | Accepted |                 | /all-pets ->                      |
+|                 |              |         |      |          |                 | gloo-system.default-petstore-8080 |
+|                 |              |         |      |          |                 | (upstream)                        |
++-----------------+--------------+---------+------+----------+-----------------+-----------------------------------+
+Waiting for upstream default-petstore-8080 to be Accepted...!
++-----------------------+------------+----------+-------------------------+
+|       UPSTREAM        |    TYPE    |  STATUS  |         DETAILS         |
++-----------------------+------------+----------+-------------------------+
+| default-petstore-8080 | Kubernetes | Accepted | svc name:      petstore |
+|                       |            |          | svc namespace: default  |
+|                       |            |          | port:          8080     |
+|                       |            |          | REST service:           |
+|                       |            |          | functions:              |
+|                       |            |          | - addPet                |
+|                       |            |          | - deletePet             |
+|                       |            |          | - findPetById           |
+|                       |            |          | - findPets              |
+|                       |            |          |                         |
++-----------------------+------------+----------+-------------------------+
+++ glooctl proxy url
++ curl http://172.18.0.2:32267/all-pets
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100    86  100    86    0     0  17200      0 --:--:-- --:--:-- --:--:-- 17200
+[{"id":1,"name":"Dog","status":"available"},{"id":2,"name":"Cat","status":"pending"}]
++ PGUSER=apisnoop
++ PGHOST=localhost
++ psql -U apisnoop -h localhost -c 'select useragent from testing.audit_event where useragent like '\''gloo%'\'' group by useragent;'
+                    useragent                     
+--------------------------------------------------
+ glooctl/v0.0.0 (darwin/amd64) kubernetes/$Format
+ gloo/v0.0.0 (linux/amd64) kubernetes/$Format
+(2 rows)
+
++ psql -U apisnoop -h localhost -c 'select useragent, endpoint, tested, conf_tested
+  from        testing.audit_event
+         join endpoint_coverage ec using(endpoint)
+ where useragent like '\''gloo%'\''
+   and ec.release = '\''1.20.0'\''
+   and conf_tested = false
+ group by endpoint, ec.release, tested, conf_tested, useragent
+ order by conf_tested asc;'
+                    useragent                     |    endpoint    | tested | conf_tested 
+--------------------------------------------------+----------------+--------+-------------
+ glooctl/v0.0.0 (darwin/amd64) kubernetes/$Format | getCodeVersion | f      | f
+(1 row)
+
